@@ -1,0 +1,14 @@
+Depends on ruby-assertions
+
+In all database driven application I need the following:
+
+  1) declare model
+  3) create scheme, update scheme, migrations
+  2) derive forms from model
+    This also could be "only derive html input fields :A,:B,:C from table foo"
+
+With active record like code this just doesn't work, because you have to edit
+so many places - no way to get your job done fast
+
+So this library provides a way to declare a model, it allows you to attach
+constraints and it derives scheme upgrades for you.
