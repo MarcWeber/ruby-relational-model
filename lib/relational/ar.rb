@@ -46,12 +46,12 @@ module Relational
       def ar_type; :price; end
     end
 
-    class BlobString < Field
-      def ar_type; :blob; end
+    class Text < Field
+      def ar_type; :text; end
     end
 
-    class BlobBinary < Field
-      def ar_type; :blob; end
+    class Binary < Field
+      def ar_type; :binary; end
     end
   end
 
@@ -68,27 +68,77 @@ module Relational
 
         # add tables
         @md.relations.right.each do |relation|
-          ls << "  create_table #{relation.name.to_s.inspect}.to_sym, :force => true do |t|"
-          relation.fields.each do |field|
-            ls << "    t.#{field.ar_create_or_change_name_and_options("")}"
+          opts = {}
+          # opts[:force] = true
+
+          pk = nil
+          case relation.primary_key_fields.length
+          when 0
+          when 1
+            pk = relation.primary_key_fields.first
+            # auto_increment
+            relation.fieldByName(pk).assert_instance_of(Relational::Fields::Integer)
+          else; raise "For ActiveRecord there is only one primary key field supported yet, relation: #{relation.name}" 
           end
+
+          opts[:primary_key] = pk unless pk.nil?
+          ls << "  create_table #{relation.name.to_s.inspect}.to_sym, #{opts.inspect} do |t|"
+          relation.fields.each do |field|
+            # Active record will add the primary key on its own !?
+            ls << "    t.#{field.ar_create_or_change_name_and_options("")}" if (pk.nil? || field.name != pk)
+          end
+
           ls << "  end"
+          begin # indexes (duplication)
+            # add indexes
+            relation.indexes.each do |index|
+              ls << "    add_index #{relation.name.to_s.inspect}.to_sym, #{index.inspect}"
+            end
+            # add unique_indexes
+            relation.unique_indexes.each do |index|
+              ls << "    add_index #{relation.name.to_s.inspect}.to_sym, #{index.inspect}, unique: true"
+            end
+          end
         end
         # change tables
         @md.relations.both.each do |rd|
+          raise "changing primary key field is not supported yet, relation: #{rd.name}" unless rd.primary_key_fields.nil?
+
+          begin # drop indexes
+            # drop indexes
+            rd.indexes.left.each do |index|
+              ls << "    remove_index #{rd.name.to_s.inspect}.to_sym, column: #{index.inspect}"
+            end
+            # drop unique_indexes
+            rd.unique_indexes.left.each do |index|
+              ls << "    remove_index #{rd.name.to_s.inspect}.to_sym, unique: true,  column: #{index.inspect}"
+            end
+          end
+
+          dropped_fields = []
           # added fields
-            rd.fields.right do |field|
-              ls << "    create_column #{rd.name.to_s.inspect}.to_sym, #{field.ar_create_or_change_name_and_options(",")}"
-            end
+          rd.fields.right do |field|
+            ls << "    create_column #{rd.name.to_s.inspect}.to_sym, #{field.ar_create_or_change_name_and_options(",")}"
+          end
           # dropped fields
-            rd.fields.left do |field|
-              ls << "    drop_column #{rd.name.to_s.inspect}.to_sym, #{rd.name.to_s.inspect}.to_sym"
-            end
+          rd.fields.left do |field|
+            ls << "    drop_column #{rd.name.to_s.inspect}.to_sym, #{rd.name.to_s.inspect}.to_sym"
+          end
           # changed fields
-            rd.fields.both do |field|
-              ls << "    change_column #{rd.name.to_s.inspect}.to_sym, #{field.right.ar_create_or_change_name_and_options(",")}"
+          rd.fields.both do |field|
+            ls << "    change_column #{rd.name.to_s.inspect}.to_sym, #{field.right.ar_create_or_change_name_and_options(",")}"
+          end
+
+          begin # indexes (duplication)
+            # add indexes
+            rd.indexes.right.each do |index|
+              ls << "    add_index #{rd.name.to_s.inspect}.to_sym, #{index.inspect}"
             end
-          # TODO indexes
+            # add unique_indexes
+            rd.unique_indexes.right.each do |index|
+              ls << "    add_index #{rd.name.to_s.inspect}.to_sym, #{index.inspect}, unique: true"
+            end
+          end
         end
 
         # drop tables
@@ -128,7 +178,7 @@ end
         unless $SCHEMA_INFO_DONE
           $SCHEMA_INFO_DONE = true
           ::ActiveRecord::Schema.define do
-            create_table SchemaInfo.table_name do |t|
+            create_table(SchemaInfo.table_name) do |t|
               t.column :version, :float
             end
           end

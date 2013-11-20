@@ -13,7 +13,7 @@ module Relational
 
     # base class for types
     class Field
-      attr_reader :opts
+      attr_accessor :opts
       def initialize(name, opts = {})
         @opts = opts.clone
         @opts[:name] = name.assert_sym
@@ -89,46 +89,46 @@ module Relational
     class Price < Field
     end
 
-    class BlobString < Field
+    # arbitrary length
+    class Text < Field
     end
-
-    class BlobBinary < Field
+    class Binary < Field
     end
 
   end
 
   class Relation # a table
-    attr_reader :fields
     def initialize(name, opts = {})
       @opts = opts.clone
       @opts[:name] = name.assert_sym
       @name = name
       @opts[:fields] ||= []
 
-      # @primaryKey, items of @indexes, @uniqIndexes must respond_to? to to_a
+      # @primary_key_fields, items of @indexes, @unique_indexes must respond_to? to to_a
       # which must return the field names to be indexed
-      @opts[:primaryKey] ||= nil # eg [:user_id, :age]
+      @opts[:primary_key_fields] ||= nil # eg [:user_id, :age]
       @opts[:indexes] ||= []     # eg [[:abc, :foo], [:bar, :baz]]
-      @opts[:uniqIndexes] ||= [] # eg [[:abc, :foo], [:bar, :baz]]
+      @opts[:unique_indexes] ||= [] # eg [[:abc, :foo], [:bar, :baz]]
     end
     def name; @opts.fetch(:name); end
-    def primaryKey; @opts.fetch(:primaryKey); end
+    def primary_key_fields; @opts.fetch(:primary_key_fields); end
     def indexes; @opts.fetch(:indexes); end
-    def uniqIndexes; @opts.fetch(:uniqIndexes); end
+    def unique_indexes; @opts.fetch(:unique_indexes); end
+    def unique_indexes=(ui); @opts[:unique_indexes] = ui; end
     def fields; @opts.fetch(:fields); end
 
-    def fieldByName(name); @fields.detect {|v| v.name =name }; end
+    def fieldByName(name); @opts[:fields].detect {|v| v.name == name }; end
 
-    def fieldsHash; Hash[@fields.map {|v| [v.name, v]}]; end
+    def fieldsHash; Hash[fields.map {|v| [v.name, v]}]; end
 
     def ==(other)
       case other
       when Relation
-        @fields == other.fields \
-        && @name == other.name \
-        && @primaryKey == other.primaryKey \
-        && @indexes == other.indexes \
-        && @uniqIndexes == other.uniqIndexes
+        fields == other.fields \
+        && name == other.name \
+        && primary_key_fields == other.primary_key_fields \
+        && indexes == other.indexes \
+        && unique_indexes == other.unique_indexes
       else false
       end
     end
@@ -137,7 +137,7 @@ module Relational
     def primary
       key = "#{name}_id".to_sym
       fields << Fields::Integer.new(key)
-      @opts[:primaryKey] = [key]
+      @opts[:primary_key_fields] = [key]
     end
 
     def method_missing(method_sym, *arguments, &block)
@@ -147,10 +147,10 @@ module Relational
       h[:price] = Fields::Price
       h[:string] = Fields::String
       h[:enum] = Fields::Enum
-      h[:blob_string] = Fields::BlobString
-      h[:blob_binary] = Fields::BlobBinary
+      h[:binary] = Fields::Binary
+      h[:text] = Fields::Text
       if h.include? method_sym
-        h[method_sym].new(*arguments, &block)
+        @opts[:fields] << h[method_sym].new(*arguments, &block)
       else
         super
       end
@@ -159,7 +159,7 @@ module Relational
   end
 
   class Model # contains relations
-    attr_reader :relations
+    attr_accessor :relations
 
     def initialize(&blk)
       @relations = []
@@ -211,11 +211,11 @@ module Relational
       h = fieldsHash
 
       # check that index field names exist:
-      @primaryKey.to_a.each {|v| h.assert_has_key(v) }
+      @primary_key_fields.to_a.each {|v| h.assert_has_key(v) }
       @indexes.each      do |index| index.to_a.each {|v| h.assert_has_key(v) } end
-      @uniqIndexes.each  do |index| index.to_a.each {|v| h.assert_has_key(v) } end
+      @unique_indexes.each  do |index| index.to_a.each {|v| h.assert_has_key(v) } end
 
-      # check that field names are unique:
+      # check that field names are uniqueue:
       @fields.map {|v| v.name}.assert_no_duplicates("duplicatie fields: ELEMENTS")
       @fields.each do |v| v.check(self) if v.respond_to? :check end
     end

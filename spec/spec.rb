@@ -28,8 +28,8 @@ describe 'simple use cases should not fail' do
       r.primary
       r.string :str, :nullable => false, :comment => 'foo'
       r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
-      r.blob_string :blob_string
-      r.blob_binary :blob_string
+      r.text :blob_string
+      r.binary :blob_string
     end
 
     m.relation(:relation_2) do |r|
@@ -47,16 +47,16 @@ describe 'simple use cases should not fail' do
     m.relation(:relation_1) do |r|
       r.primary
       r.string :str, :nullable => false, :comment => 'foo'
-      r.blob_string :name1
-      r.blob_binary :name2
+      r.text :name1
+      r.binary :name2
     end
 
     m.relation(:relation_3) do |r|
       r.primary
       r.string :str, :nullable => false, :comment => 'foo'
       r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
-      r.blob_string :blob_string
-      r.blob_binary :blob_string
+      r.text :blob_string
+      r.binary :blob_string
     end
   end
 
@@ -82,10 +82,11 @@ describe "ActiveRecordSqliteMigrations" do
 
     m.relation(:relation_1) do |r|
       r.primary
+      r.unique_indexes = [[:enum, :str],[:enum]]
       r.string :str, :nullable => false, :comment => 'foo'
       r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
-      r.blob_string :blob_string
-      r.blob_binary :blob_string
+      r.text :blob_string
+      r.binary :blob_string
     end
 
     m.relation(:relation_2) do |r|
@@ -99,16 +100,17 @@ describe "ActiveRecordSqliteMigrations" do
     m.relation(:relation_1) do |r|
       r.primary
       r.string :str, :nullable => false, :comment => 'foo'
-      r.blob_string :name1
-      r.blob_binary :name2
+      r.text :name1
+      r.binary :name2
+      r.unique_indexes = [[:str]]
     end
 
     m.relation(:relation_3) do |r|
       r.primary
       r.string :str, :nullable => false, :comment => 'foo'
       r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
-      r.blob_string :blob_string
-      r.blob_binary :blob_string
+      r.text :blob_string
+      r.binary :blob_string
     end
   end
 

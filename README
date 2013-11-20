@@ -12,3 +12,11 @@ so many places - no way to get your job done fast
 
 So this library provides a way to declare a model, it allows you to attach
 constraints and it derives scheme upgrades for you.
+
+
+backends:
+
+ActiveRecord. Status:
+  creating migrations works, initial indexes support
+
+  creating model classes: missing

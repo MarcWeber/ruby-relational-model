@@ -27,18 +27,20 @@ module Relational
   end
 
   class RelationDiff
-    attr_reader :left, :right, :primaryKey, :indexes, :uniqIndexes, :fields
+    attr_reader :left, :right, :primary_key_fields, :indexes, :unique_indexes, :fields, :name
     def initialize(left, right)
       @left = left
       @right = right
 
-      # primary key
-      @primaryKey = nil
-      @primaryKey = LEFT_RIGHT.new(left.primaryKey, right.primaryKey) if left.primaryKey != right.primaryKey
+      @name = left.name
 
-      # indexes, uniqIndexes
+      # primary key
+      @primary_key_fields = nil
+      @primary_key_fields = LEFT_RIGHT.new(left.primary_key_fields, right.primary_key_fields) if left.primary_key_fields != right.primary_key_fields
+
+      # indexes, unique_indexes
       @indexes = Diff.new(left.indexes, right.indexes) {|v| v.inspect}
-      @uniqIndexes = Diff.new(left.uniqIndexes, right.uniqIndexes) {|v| v.inspect}
+      @unique_indexes = Diff.new(left.unique_indexes, right.unique_indexes) {|v| v.inspect}
 
       # fields
       @fields = Diff.new(left.fields, right.fields) {|v| v.name}
