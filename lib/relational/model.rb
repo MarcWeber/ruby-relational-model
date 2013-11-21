@@ -47,6 +47,10 @@ module Relational
         @opts == other.opts
       end
 
+      def check
+        raise "use nullable isntead of null" if @opts.include? :null
+      end
+
     end
 
     # you can extend and add your own methods the way you like
@@ -65,8 +69,10 @@ module Relational
         @opts.fetch(:values)
       end
 
+      alias :super_check :check
       def check
         @opts.include? :values
+        super_check
       end
     end
 
@@ -78,7 +84,13 @@ module Relational
 
       def size
         # sane default for most use cases such as name, email, zip, ..
-        @opts.fetch(:size, 100)
+        @opts.fetch(:limit, 100)
+      end
+
+      alias :super_check :check
+      def check
+        raise "use size instead of limit" if @opts.include? :limit
+        super_check
       end
     end
 

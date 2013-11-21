@@ -20,3 +20,58 @@ ActiveRecord. Status:
   creating migrations works, initial indexes support
 
   creating model classes: missing
+
+
+Example
+
+First declare a model, thus
+
+  - specify tables
+  - fields
+  - checking
+  - how to derive HTML forms and similar
+
+  The model, relation, fields have an option hash as property store
+  making it most simple to add your own information.
+
+  model = Model.new do |m|
+    m.relation(:relation_1) do |r|
+      r.primary
+      r.string :str, :nullable => false, :comment => 'foo'
+      r.text :name1
+      r.binary :name2
+      r.unique_indexes = [[:str]]
+    end
+
+    m.relation(:relation_3) do |r|
+      r.primary
+      r.string :str, :nullable => false, :comment => 'foo'
+      r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
+      r.text :blob_string
+      r.binary :blob_string
+    end
+  end
+
+
+
+Second, ask the library to write a new migration, eg targeting ActiveRecord
+
+  migrationDir = "migrations"
+  Relational::Migrate.new(model, Relational::ActiveRecord::MigrationHelper.new(:force_review => false), migrationDir) \
+    .migrate
+
+Third: ask the libraries to derive models:
+
+  Relational::ActiveRecord::ModelGenerator.new(model).createmodels(Relational)
+
+Fourth: Have fun creating forms:
+
+  form = Form.new(
+    :fields => User.form_fieds([:useranme,:login,:password])
+    :ondata => do |data|
+      // create user, sign in, ...
+    end
+  )
+  this should somehow implement
+    - controller
+    - view

@@ -120,6 +120,12 @@ describe "ActiveRecordSqliteMigrations" do
   Relational::Migrate.new(m2, Relational::ActiveRecord::MigrationHelper.new(:force_review => false), tmpDir) \
     .migrate
 
+  Relational::ActiveRecord::ModelGenerator.new(m2).createmodels(Relational)
+
+  Relation_1.create :str => "str", :name1 => 'x', :name2 => 'y'
+  # str missing (must not be null
+  expect { Relation_1.create :name1 => 'x', :name2 => 'y' }.to raise_error
+
   after(:all) do
   end
 end
