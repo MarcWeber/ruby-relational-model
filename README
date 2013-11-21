@@ -35,24 +35,25 @@ First declare a model, thus
   making it most simple to add your own information.
 
   model = Model.new do |m|
-    m.relation(:relation_1) do |r|
+    m.relation(:user) do |r|
       r.primary
-      r.string :str, :nullable => false, :comment => 'foo'
-      r.text :name1
-      r.binary :name2
-      r.unique_indexes = [[:str]]
+      r.string :username, :comment => 'mandatory username'
+      r.string :password, :comment => 'mandatory username'
+      r.has_n(:login_attempts)
     end
 
-    m.relation(:relation_3) do |r|
+    m.relation(:events) do |r|
       r.primary
-      r.string :str, :nullable => false, :comment => 'foo'
-      r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
-      r.text :blob_string
-      r.binary :blob_string
+      r.string :eventname
+    end
+    m.n_to_m(:user, :events, :relationname => :event_attendees)
+
+    m.relation(:login_attempts) do |r|
+      r.primary
+      r.date :when
+      # user_id field will be added by relation
     end
   end
-
-
 
 Second, ask the library to write a new migration, eg targeting ActiveRecord
 

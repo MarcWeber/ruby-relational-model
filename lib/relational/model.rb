@@ -14,7 +14,9 @@ module Relational
     # base class for types
     class Field
       attr_accessor :opts
-      def initialize(name, opts = {})
+      def initialize(model, relation, name, opts = {})
+        @model = model
+        @relation = relation
         @opts = opts.clone
         @opts[:name] = name.assert_sym
         @opts[:comment] ||= nil
@@ -51,6 +53,9 @@ module Relational
         raise "use nullable isntead of null" if @opts.include? :null
       end
 
+      def duplicate(relation, name)
+        self.class.new(@model, relation, name, @opts.clone)
+      end
     end
 
     # you can extend and add your own methods the way you like
@@ -109,6 +114,77 @@ module Relational
 
   end
 
+  module Relationships
+    class OneToN
+      attr_reader :opts
+      def initialize(model, opts)
+        @model = model
+        @opts = opts
+        @opts.assert_has_key(:r_one)
+        @opts.assert_has_key(:r_n)
+      end
+      def r_n; @opts.fetch(:r_n); end
+      def r_one; @opts.fetch(:r_one); end
+      def r_prefix; @opts.fetch(:r_prefix); end
+
+      def fields(relation)
+        if relation.name == @r_n
+          relation_n = @model.relationByName(r_n)
+          # lookup type of primary key fields
+          @model.relationByName(r_one).primary_key_fields.map do |field|
+            field.duplicate(@model, relation_n, "#{prefix}field.name")
+          end
+        else
+          []
+        end
+      end
+
+      def relations
+        []
+      end
+    end
+
+    class MToN
+      attr_reader :opts
+
+      # block can add additional fields
+      def initialize(model, opts, &blk)
+        @model = model
+        @opts = opts
+        @opts[:relation_name] = "rel_#{opts.fetch(:r_n)}_#{opts.fetch(:r_m)}"
+      end
+
+      def fields(relation)
+        if relation.name == @r_n
+          relation_n = @model.relationByName(r_n)
+          # lookup type of primary key fields
+          @model.relationByName(r_one).primary_key_fields.map do |field|
+            field.duplicate(@model, relation_n, "#{prefix}field.name")
+          end
+        else
+          []
+        end
+      end
+
+      def relations
+        [model.relation(@opts.fetch(:relation_name), &blk)]
+      end
+    end
+
+    def check
+      # relation r_one must exist
+      relation_one = @model.relationByName(r_one)
+      relation_one.assert_not_nil
+      # and have at least one primary key field
+      relation_one.primary_key_fields.assert_condition{|v| v.length > 1}
+
+      # relation r_n must exist, too
+      @model.relationByName(r_n).assert_not_nil
+    end
+
+    # TODO implement more relations
+  end
+
   class Relation # a table
     def initialize(name, opts = {})
       @opts = opts.clone
@@ -127,6 +203,8 @@ module Relational
     def indexes; @opts.fetch(:indexes); end
     def unique_indexes; @opts.fetch(:unique_indexes); end
     def unique_indexes=(ui); @opts[:unique_indexes] = ui; end
+
+    # may return fields which are generated on the fly, eg by relations
     def fields; @opts.fetch(:fields); end
 
     def fieldByName(name); @opts[:fields].detect {|v| v.name == name }; end
@@ -168,14 +246,31 @@ module Relational
       end
     end
 
+    def parent(*args)
+      args.each do |relation_without_s|
+        model.oneToN(self.name, "#{relation_without_s.to_s}s" )
+      end
+    end
+
   end
 
   class Model # contains relations
-    attr_accessor :relations
-
     def initialize(&blk)
       @relations = []
+      @relationships = [] # contains OneToN and the like
       blk.call(self) if blk
+    end
+
+    def relations
+      @relations + (@relationships.map {|v| v.relations}.flatten)
+    end
+
+    def oneToN(*arguments)
+      @relationships << Relationships::OneToN.new(self,*arguments)
+    end
+
+    def mToN(*arguments)
+      @relationships << Relationships::MToN.new(self,*arguments)
     end
 
     # may return nil
@@ -235,8 +330,14 @@ module Relational
 
   class Model
     def check
+      # check that relation was not defined twice (best effort)
+      rs_opts = @relationships.map {|rs| rs.opts}
+      raise "some relation ships have been defined twice" if rs_opts.uniq.length != rs_opts.length
+
       @relations.map {|v| v.name}.assert_no_duplicates("duplicatie relations found: ELEMENTS")
       @relations.each do |v| v.check(self) end
+
+      @relationships.each do |ship| ship.check end
     end
   end
 
