@@ -15,11 +15,16 @@ module Relational
       @migration_path = migration_path
       @migrationHelper = migrationHelper
 
-      require "yaml"
-      @opts = {
-        :dump_from_file => lambda {|file| YAML::parse_file(filename) },
-        :dump_to_file => lambda {|file, thing| File.open(file, "wb") { |file| Marshal.dump(thing.to_yaml, file) } }
-      }
+      @opts = {}
+      case :dump
+      when :yaml
+        require "yaml"
+        @opts[:dump_from_file] = proc {|file| YAML::parse_file(file) }
+        @opts[:dump_to_file] = proc {|file, thing| File.open(file, "wb") { |file| Marshal.dump(thing.to_yaml, file) } }
+      when :dump
+        @opts[:dump_from_file] = proc {|file| File.open(file, "rb") { |f| Marshal.load(f) }}
+        @opts[:dump_to_file] = proc {|file, thing| File.open(file, "wb") { |f| Marshal.dump(thing, f) }}
+      end
     end
 
     def migrate
@@ -31,22 +36,28 @@ module Relational
 
       latest_model = v_next == 1 \
         ? Relational::Model.new \
-        : @opts[:dump_from_file].call
+        : @opts[:dump_from_file].call(file(v_next - 1, "dump"))
 
-      if latest_model != @model
+      puts latest_model.inspect
+
+      puts @model.inspect
+
+      if not (latest_model == @model)
         # looks like we need a new migration, something has changed..
         rb_contents = @migrationHelper.migration_file(v_next, latest_model, @model)
-        @opts[:dump_to_file].call(file, @model)
+        @opts[:dump_to_file].call(file(v_next, "dump"), @model)
         File.open(file(v_next, "rb"), "wb") { |file| file.write(rb_contents) }
       end
 
       # now try migrating
       db_version = @migrationHelper.version
       puts "db version is #{db_version} latest: #{v_next}"
-      while db_version < v_next
-        db_version += 1
+      db_version += 1
+      while db_version < v_next and File.exist? file(db_version, "rb")
+        puts ">>>> migrating to #{db_version}"
         @migrationHelper.migrate(db_version.to_i, file(db_version, "rb"))
         SchemaInfo.create(:version => db_version)
+        db_version += 1
       end
     end
 

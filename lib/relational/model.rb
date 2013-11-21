@@ -74,7 +74,7 @@ module Relational
 
     class Enum < Field
       attr_accessor :values
-      def initialize(name, opts)
+      def initialize(model, relation, name, opts)
         opts.assert_has_key(:values)
         super
       end
@@ -124,7 +124,14 @@ module Relational
   end
 
   module Relationships
-    class OneToN
+    class Base
+      def ==(other)
+        return false unless self.instance_of? other.class
+        @opts == other.opts
+      end
+    end
+
+    class OneToN < Base
       attr_reader :opts
       def initialize(model, opts)
         @model = model
@@ -153,34 +160,24 @@ module Relational
       end
     end
 
-    class MToN
+    class MToN < Base
       attr_reader :opts
 
       # block can add additional fields
       def initialize(model, opts, &blk)
         @model = model
         @opts = opts
-        @opts[:blk] = blk
-        @opts[:relation_name] = "rel_#{opts.fetch(:r_n)}_#{opts.fetch(:r_m)}".to_sym
+        @opts[:template] = Relation.new(@model, :template, &blk)
+        @opts[:relation_name] ||= "rel_#{opts.fetch(:r_n)}_#{opts.fetch(:r_m)}".to_sym
       end
 
       def fields(relation)
-        if relation.name == @r_n
-          relation_n = @model.relationByName(r_n)
-          # lookup type of primary key fields
-          @model.relationByName(r_one).primary_key_fields.map do |field|
-            field.duplicate(@model, relation_n, "#{prefix}field.name")
-          end
-        else
-          []
-        end
+        []
       end
 
       def relations
-        r = [
-        Relation.new(@model, @opts.fetch(:relation_name)) do |r|
-           @opts[:blk].call(r) if @opts[:blk]
-         end
+        [
+          @opts.fetch(:template).duplicate(@model, @opts.fetch(:relation_name))
         ]
       end
     end
@@ -230,11 +227,12 @@ module Relational
       case other
       when Relation
         fields == other.fields \
-        && name == other.name \
-        && primary_key_fields == other.primary_key_fields \
-        && indexes == other.indexes \
-        && unique_indexes == other.unique_indexes
-      else false
+                && name == other.name \
+                && primary_key_fields == other.primary_key_fields \
+                && indexes == other.indexes \
+                && unique_indexes == other.unique_indexes
+      else
+        false
       end
     end
 
@@ -271,9 +269,14 @@ module Relational
       end
     end
 
+    def duplicate(model, name)
+      self.class.new(@model, name, @opts.clone)
+    end
+
   end
 
   class Model # contains relations
+
     def initialize(&blk)
       @relations = []
       @relationships = [] # contains OneToN and the like
@@ -283,13 +286,14 @@ module Relational
     def relations
       @relations + (@relationships.map {|v| v.relations}.flatten)
     end
+    attr_reader :relationships
 
     def oneToN(*arguments)
       @relationships << Relationships::OneToN.new(self, *arguments)
     end
 
     def mToN(*arguments)
-      @relationships << Relationships::MToN.new(self,*arguments)
+      @relationships << Relationships::MToN.new(self, *arguments)
     end
 
     # may return nil
@@ -307,7 +311,8 @@ module Relational
     def ==(other)
       case other
       when Model
-        @relations == other.relations
+        relations == other.relations \
+        && @relationships == other.relationships
       else false
       end
     end
@@ -357,6 +362,8 @@ module Relational
       @relations.each do |v| v.check(self) end
 
       @relationships.each do |ship| ship.check end
+      # check serialization
+      raise "marshalling failed" unless Marshal.load(Marshal.dump(self)) == self
     end
   end
 

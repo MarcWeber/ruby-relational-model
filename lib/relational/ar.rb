@@ -86,7 +86,7 @@ module Relational
 
   class Relation
     def ar_name
-      "#{name}s"
+      name
     end
 
     # active record specific hack:
@@ -114,7 +114,7 @@ module Relational
       def createmodels(container)
         @model.relations.each do |relation|
           c = Class.new(::ActiveRecord::Base)
-          container.const_set(relation.name.capitalize, c)
+          container.const_set(relation.name.capitalize.to_s.gsub(/s$/,'').to_sym, c)
         end
       end
     end
@@ -237,6 +237,7 @@ end
       end
 
       def version
+        SchemaInfo.connection.schema_cache.clear!
         unless SchemaInfo.table_exists?
           ::ActiveRecord::Schema.define do
             create_table(SchemaInfo.table_name) do |t|

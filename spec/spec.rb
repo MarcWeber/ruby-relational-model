@@ -11,6 +11,52 @@ require "sqlite3"
 
 include Relational
 
+def ser_unser(a)
+  Marshal.load(Marshal.dump(a))
+end
+
+def create_models
+  m1 = Model.new do |m|
+
+    m.relation(:relation_1) do |r|
+      r.primary
+      r.unique_indexes = [[:enum, :str],[:enum]]
+      r.string :str, :nullable => false, :comment => 'foo'
+      r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
+      r.text :blob_string
+      r.binary :blob_string
+    end
+
+    m.relation(:relation_2) do |r|
+      r.primary
+      r.string :str, :nullable => false, :comment => 'foo'
+    end
+
+  end
+
+  m2 = Model.new do |m|
+    m.relation(:relation_1) do |r|
+      r.primary
+      r.string :str, :nullable => false, :comment => 'foo'
+      r.text :name1
+      r.binary :name2
+      r.unique_indexes = [[:str]]
+    end
+
+    m.relation(:relation_3) do |r|
+      r.primary
+      r.string :str, :nullable => false, :comment => 'foo'
+      r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
+      r.text :blob_string
+      r.binary :blob_string
+    end
+
+    m.mToN(:r_m => :relation_1, :r_n => :relation_2)
+  end
+  {:m1 => m1, :m2 => m2}
+end
+
+
 describe Relational::Diff do
   it "should diff" do
     d = Relational::Diff.new([1,2], [2,3])
@@ -78,53 +124,35 @@ describe "ActiveRecordSqliteMigrations" do
     end
   end
 
-  m = Model.new do |m|
+  describe "model comparison and upgrade" do
+    it "" do
+      ms = create_models
+      ms2 = create_models
 
-    m.relation(:relation_1) do |r|
-      r.primary
-      r.unique_indexes = [[:enum, :str],[:enum]]
-      r.string :str, :nullable => false, :comment => 'foo'
-      r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
-      r.text :blob_string
-      r.binary :blob_string
-    end
+      (ms.fetch(:m1) == ms2.fetch(:m1)).should be(true)
+      (ms.fetch(:m2) == ms2.fetch(:m2)).should be(true)
 
-    m.relation(:relation_2) do |r|
-      r.primary
-      r.string :str, :nullable => false, :comment => 'foo'
-    end
+      (ms.fetch(:m1) == ser_unser(ms.fetch(:m1))).should be(true)
+      (ms.fetch(:m2) == ser_unser(ms.fetch(:m2))).should be(true)
 
-  end
+      ms.fetch(:m1).should_not equal(ms.fetch(:m2))
+      ms2.fetch(:m2).should_not equal(ms.fetch(:m1))
 
-  m2 = Model.new do |m|
-    m.relation(:relation_1) do |r|
-      r.primary
-      r.string :str, :nullable => false, :comment => 'foo'
-      r.text :name1
-      r.binary :name2
-      r.unique_indexes = [[:str]]
-    end
+      ms.fetch(:m2).relations.length.should equal(3)
 
-    m.relation(:relation_3) do |r|
-      r.primary
-      r.string :str, :nullable => false, :comment => 'foo'
-      r.enum :enum, :values => [:Yes, :No, :Maybe], :default => :Yes
-      r.text :blob_string
-      r.binary :blob_string
+      Relational::Migrate.new(ms.fetch(:m1), Relational::ActiveRecord::MigrationHelper.new(:force_review => false), tmpDir) \
+        .migrate
+
+      Relational::Migrate.new(ms.fetch(:m2), Relational::ActiveRecord::MigrationHelper.new(:force_review => false), tmpDir) \
+        .migrate
+
+      Relational::ActiveRecord::ModelGenerator.new(m2).createmodels(Relational)
+
+      Relation_1.create :str => "str", :name1 => 'x', :name2 => 'y'
+      # str missing (must not be null
+      expect { Relation_1.create :name1 => 'x', :name2 => 'y' }.to raise_error
     end
   end
-
-  Relational::Migrate.new(m, Relational::ActiveRecord::MigrationHelper.new(:force_review => false), tmpDir) \
-    .migrate
-
-  Relational::Migrate.new(m2, Relational::ActiveRecord::MigrationHelper.new(:force_review => false), tmpDir) \
-    .migrate
-
-  Relational::ActiveRecord::ModelGenerator.new(m2).createmodels(Relational)
-
-  Relation_1.create :str => "str", :name1 => 'x', :name2 => 'y'
-  # str missing (must not be null
-  expect { Relation_1.create :name1 => 'x', :name2 => 'y' }.to raise_error
 
   after(:all) do
   end
