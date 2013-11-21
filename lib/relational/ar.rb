@@ -18,8 +18,12 @@ module Relational
         opts
       end
 
+      def ar_name_and_opts
+        "#{@opts[:name].to_s.inspect}.to_sym, #{ar_options}"
+      end
+
       def ar_create_or_change_name_and_options(fst_sep)
-        "#{ar_type.to_s}#{fst_sep} #{@opts[:name].to_s.inspect}.to_sym, #{ar_options}"
+        "#{ar_type.to_s}#{fst_sep} #{ar_name_and_opts}"
       end
 
       def ar_model_fields
@@ -157,7 +161,7 @@ module Relational
           end
           # dropped fields
           rd.fields.left.each do |field|
-            ls << "    remove_column #{rd.ar_name.to_s.inspect}.to_sym, #{field.name.to_s.inspect}.to_sym"
+            ls << "    remove_column #{rd.ar_name.to_s.inspect}.to_sym, #{field.ar_name_and_opts}"
           end
           # changed fields
           rd.fields.both.each do |field|
