@@ -46,7 +46,9 @@ First declare a model, thus
       r.primary
       r.string :eventname
     end
-    m.n_to_m(:user, :events, :relationname => :event_attendees)
+    m.mToN(:user, :events, :relationname => :event_attendees) do |r|
+      # add additional fields to relation table
+    end
 
     m.relation(:login_attempts) do |r|
       r.primary
@@ -58,7 +60,7 @@ First declare a model, thus
 Second, ask the library to write a new migration, eg targeting ActiveRecord
 
   migrationDir = "migrations"
-  Relational::Migrate.new(model, Relational::ActiveRecord::MigrationHelper.new(:force_review => false), migrationDir) \
+  Relational::Migrate.new(model, Relational::ActiveRecord::MigrationHelper.new(:force_review => true), migrationDir) \
     .migrate
 
 Third: ask the libraries to derive models:

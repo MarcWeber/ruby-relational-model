@@ -60,7 +60,16 @@ module Relational
 
     # you can extend and add your own methods the way you like
     # Will be represented as y/n on databases which don't support types
-    class Bool < Field
+    class Boolean < Field
+    end
+
+    class Date < Field
+    end
+
+    class DateTime < Field
+    end
+
+    class Float < Field
     end
 
     class Enum < Field
@@ -82,7 +91,7 @@ module Relational
     end
 
     class String < Field
-      def initialize(name, opts)
+      def initialize(model, relation, name, opts = {})
         opts[:default] ||= ''
         super
       end
@@ -151,7 +160,8 @@ module Relational
       def initialize(model, opts, &blk)
         @model = model
         @opts = opts
-        @opts[:relation_name] = "rel_#{opts.fetch(:r_n)}_#{opts.fetch(:r_m)}"
+        @opts[:blk] = blk
+        @opts[:relation_name] = "rel_#{opts.fetch(:r_n)}_#{opts.fetch(:r_m)}".to_sym
       end
 
       def fields(relation)
@@ -167,7 +177,11 @@ module Relational
       end
 
       def relations
-        [model.relation(@opts.fetch(:relation_name), &blk)]
+        r = [
+        Relation.new(@model, @opts.fetch(:relation_name)) do |r|
+           @opts[:blk].call(r) if @opts[:blk]
+         end
+        ]
       end
     end
 
@@ -186,7 +200,8 @@ module Relational
   end
 
   class Relation # a table
-    def initialize(name, opts = {})
+    def initialize(model, name, opts = {})
+      @model = model
       @opts = opts.clone
       @opts[:name] = name.assert_sym
       @name = name
@@ -194,7 +209,7 @@ module Relational
 
       # @primary_key_fields, items of @indexes, @unique_indexes must respond_to? to to_a
       # which must return the field names to be indexed
-      @opts[:primary_key_fields] ||= nil # eg [:user_id, :age]
+      @opts[:primary_key_fields] ||= [] # eg [:user_id, :age]
       @opts[:indexes] ||= []     # eg [[:abc, :foo], [:bar, :baz]]
       @opts[:unique_indexes] ||= [] # eg [[:abc, :foo], [:bar, :baz]]
     end
@@ -226,7 +241,7 @@ module Relational
     # add primary key
     def primary
       key = "#{name}_id".to_sym
-      fields << Fields::Integer.new(key)
+      fields << Fields::Integer.new(@model, self, key)
       @opts[:primary_key_fields] = [key]
     end
 
@@ -239,8 +254,12 @@ module Relational
       h[:enum] = Fields::Enum
       h[:binary] = Fields::Binary
       h[:text] = Fields::Text
+      h[:date] = Fields::Date
+      h[:datetime] = Fields::DateTime
+      h[:float] = Fields::Float
+      h[:boolean] = Fields::Boolean
       if h.include? method_sym
-        @opts[:fields] << h[method_sym].new(*arguments, &block)
+        @opts[:fields] << h[method_sym].new(@model, @relation, *arguments, &block)
       else
         super
       end
@@ -248,7 +267,7 @@ module Relational
 
     def parent(*args)
       args.each do |relation_without_s|
-        model.oneToN(self.name, "#{relation_without_s.to_s}s" )
+        @model.oneToN(:r_one => self.name, :r_n => "#{relation_without_s.to_s}s".to_sym)
       end
     end
 
@@ -266,7 +285,7 @@ module Relational
     end
 
     def oneToN(*arguments)
-      @relationships << Relationships::OneToN.new(self,*arguments)
+      @relationships << Relationships::OneToN.new(self, *arguments)
     end
 
     def mToN(*arguments)
@@ -279,7 +298,7 @@ module Relational
     def relation(name)
       r = self.relationByName(name)
       if r.nil?
-        r = Relation.new(name)
+        r = Relation.new(self, name)
         @relations << r
       end
       yield r

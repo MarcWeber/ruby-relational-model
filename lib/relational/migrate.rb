@@ -14,6 +14,12 @@ module Relational
       @model = model
       @migration_path = migration_path
       @migrationHelper = migrationHelper
+
+      require "yaml"
+      @opts = {
+        :dump_from_file => lambda {|file| YAML::parse_file(filename) },
+        :dump_to_file => lambda {|file, thing| File.open(file, "wb") { |file| Marshal.dump(thing.to_yaml, file) } }
+      }
     end
 
     def migrate
@@ -25,12 +31,12 @@ module Relational
 
       latest_model = v_next == 1 \
         ? Relational::Model.new \
-        : File.open(file(v_next - 1, "dump"), "rb") { |file| Marshal.load(file) }
+        : @opts[:dump_from_file].call
 
       if latest_model != @model
         # looks like we need a new migration, something has changed..
         rb_contents = @migrationHelper.migration_file(v_next, latest_model, @model)
-        File.open(file(v_next, "dump"), "wb") { |file| Marshal.dump(@model, file) }
+        @opts[:dump_to_file].call(file, @model)
         File.open(file(v_next, "rb"), "wb") { |file| file.write(rb_contents) }
       end
 

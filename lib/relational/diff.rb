@@ -57,7 +57,7 @@ module Relational
     def initialize(left, right)
       @left = left
       @right = right
-      @relations = Diff.new(left.relations, right.relations) {|v| v.name}
+      @relations = Diff.new(left.relations, right.relations) {|v| v.name }
       @relations.both.map! do |lr|
         RelationDiff.new(lr.left, lr.right)
       end

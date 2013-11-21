@@ -9,7 +9,7 @@ module Relational
 
     class Field
       def ar_type
-        raise "override"
+        raise "override #{self.inspect}"
       end
 
       def ar_options
@@ -42,6 +42,14 @@ module Relational
       def ar_type; :boolean; end
     end
 
+    class Date < Field
+      def ar_type; :date; end
+    end
+
+    class DateTime < Field
+      def ar_type; :datetime; end
+    end
+
     class String < Field
       def ar_type; :string; end
       alias :super_ar_model_fields :ar_model_fields
@@ -54,6 +62,9 @@ module Relational
     class Integer < Field
       def ar_type; :integer; end
     end
+    class Float < Field
+      def ar_type; :float; end
+    end
 
     # currency like. Should allow 2 digits after ,
     class Price < Field
@@ -61,6 +72,10 @@ module Relational
     end
 
     class Text < Field
+      def ar_type; :text; end
+    end
+
+    class Boolean < Field
       def ar_type; :text; end
     end
 
@@ -72,6 +87,13 @@ module Relational
   class Relation
     def ar_name
       "#{name}s"
+    end
+
+    # active record specific hack:
+    # call timestamps adding inserted/updated timestamps in create table only
+    attr_reader :ar_timestamps_hack
+    def ar_timestamps_hack
+      @ar_timestamps_hack = true
     end
   end
 
@@ -127,8 +149,11 @@ module Relational
             # Active record will add the primary key on its own !?
             ls << "    t.#{field.ar_create_or_change_name_and_options("")}" if (pk.nil? || field.name != pk)
           end
-
+          if relation.ar_timestamps_hack
+            ls << "    t.timestamps"
+          end
           ls << "  end"
+
           begin # indexes (duplication)
             # add indexes
             relation.indexes.each do |index|
@@ -212,10 +237,7 @@ end
       end
 
       def version
-        $SCHEMA_INFO_DONE ||= false
-        # unless SchemaInfo.table_exists?
-        unless $SCHEMA_INFO_DONE
-          $SCHEMA_INFO_DONE = true
+        unless SchemaInfo.table_exists?
           ::ActiveRecord::Schema.define do
             create_table(SchemaInfo.table_name) do |t|
               t.column :version, :float
