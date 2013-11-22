@@ -50,7 +50,7 @@ module Relational
       end
 
       def check
-        raise "use nullable isntead of null" if @opts.include? :null
+        raise "use nullable instead of null" if @opts.include? :null
       end
 
       def duplicate(relation, name)
@@ -148,7 +148,9 @@ module Relational
           relation_n = @model.relationByName(r_n)
           # lookup type of primary key fields
           @model.relationByName(r_one).primary_key_fields.map do |field|
-            field.duplicate(@model, relation_n, "#{prefix}field.name")
+            f = field.duplicate(@model, relation_n, "#{prefix}field.name")
+            f.references = {:relation => @r_n, :field => field.name}
+            f
           end
         else
           []
@@ -157,6 +159,14 @@ module Relational
 
       def relations
         []
+      end
+
+      def check
+        # relation r_one must exist
+        r_one = @model.relationByName(@opts[:r_one]).assert_not_nil
+
+        # and have at least one primary key field
+        r_one.primary_key_fields.assert_condition{|v| v.length > 1}
       end
     end
 
@@ -176,21 +186,43 @@ module Relational
       end
 
       def relations
-        [
-          @opts.fetch(:template).duplicate(@model, @opts.fetch(:relation_name))
-        ]
+        r = @opts.fetch(:template).duplicate(@model, @opts.fetch(:relation_name))
+
+        m_name = @opts.fetch(:r_m)
+        n_name = @opts.fetch(:r_n)
+
+        m_relation = @model.relationByName(m_name)
+        n_relation = @model.relationByName(n_name)
+
+        raise "relation #{m_name} does not exist" unless m_relation
+        raise "relation #{n_name} does not exist" unless n_relation
+
+        m_fields = m_relation.primary_key_fields.map {|f| m_relation.fieldByName(f).assert_not_nil }
+        n_fields = n_relation.primary_key_fields.map {|f| n_relation.fieldByName(f).assert_not_nil }
+        m_fields.each do |m_field|
+          f = m_field.duplicate(r, m_field.name)
+          f.opts[:references] = {:relation => m_name, :field => m_field.name}
+          r.fields << f
+        end
+        n_fields.each do |n_field|
+          f = n_field.duplicate(r, n_field.name)
+          f.opts[:references] = {:relation => n_name, :field => n_field.name}
+          r.fields << f
+        end
+        r.indexes << [m_fields.map {|v| v.name}, n_fields.map {|v| v.name}]
+        r.indexes << [n_fields.map {|v| v.name}, n_fields.map {|v| v.name}]
+        [ r ]
       end
     end
 
     def check
       # relation r_one must exist
-      relation_one = @model.relationByName(r_one)
-      relation_one.assert_not_nil
-      # and have at least one primary key field
-      relation_one.primary_key_fields.assert_condition{|v| v.length > 1}
+      r_m = @model.relationByName(@opts[:r_m]).assert_not_nil
+      r_n = @model.relationByName(@opts[:r_n]).assert_not_nil
 
-      # relation r_n must exist, too
-      @model.relationByName(r_n).assert_not_nil
+      # and have at least one primary key field
+      r_m.primary_key_fields.assert_condition{|v| v.length > 1}
+      r_n.primary_key_fields.assert_condition{|v| v.length > 1}
     end
 
     # TODO implement more relations

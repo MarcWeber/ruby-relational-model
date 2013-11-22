@@ -113,7 +113,9 @@ module Relational
 
       def createmodels(container)
         @model.relations.each do |relation|
-          c = Class.new(::ActiveRecord::Base)
+          c = Class.new(::ActiveRecord::Base) do |t|
+          end
+          c.table_name = relation.name
           container.const_set(relation.name.capitalize.to_s.gsub(/s$/,'').to_sym, c)
         end
       end

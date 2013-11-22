@@ -51,7 +51,7 @@ def create_models
       r.binary :blob_string
     end
 
-    m.mToN(:r_m => :relation_1, :r_n => :relation_2)
+    m.mToN(:r_m => :relation_1, :r_n => :relation_3)
   end
   {:m1 => m1, :m2 => m2}
 end
@@ -146,7 +146,7 @@ describe "ActiveRecordSqliteMigrations" do
       Relational::Migrate.new(ms.fetch(:m2), Relational::ActiveRecord::MigrationHelper.new(:force_review => false), tmpDir) \
         .migrate
 
-      Relational::ActiveRecord::ModelGenerator.new(m2).createmodels(Relational)
+      Relational::ActiveRecord::ModelGenerator.new(ms.fetch(:m2)).createmodels(Relational)
 
       Relation_1.create :str => "str", :name1 => 'x', :name2 => 'y'
       # str missing (must not be null
